@@ -107,19 +107,25 @@ module.exports = function deployStatic (params, callback) {
       function (params, callback) {
         if (!Bucket) {
           let cloudformation = new aws.CloudFormation(config)
-          cloudformation.listStackResources({
-            StackName: stackname
-          },
-          function done (err, data) {
-            if (err) callback(err)
-            else {
-              let find = i => i.ResourceType === 'AWS::S3::Bucket' && i.LogicalResourceId === 'StaticBucket'
-              Bucket = data.StackResourceSummaries.find(find).PhysicalResourceId
-              callback(null, params)
-            }
-          })
+          ;(function lookup(NextToken) {
+            cloudformation.listStackResources({
+              StackName: stackname,
+              NextToken
+            },
+            function done (err, data) {
+              if (err) callback(err)
+              else {
+                let find = i=> i.ResourceType === 'AWS::S3::Bucket' && i.LogicalResourceId === 'StaticBucket'
+                let resource = data.StackResourceSummaries.find(find)
+                if (resource) {
+                  Bucket = resource.PhysicalResourceId
+                  callback(null, params)
+                }
+                else if (data.NextToken) lookup(data.NextToken)
+              }
+            })
+          })()
         }
-        else callback(null, params)
       },
 
       function ({ fingerprint, ignore, folder }, callback) {
